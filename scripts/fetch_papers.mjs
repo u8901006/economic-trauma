@@ -73,8 +73,13 @@ async function searchPapers(query, retmax = 50) {
     retmode: 'json',
   });
   try {
-    const resp = await fetch(`${PUBMED_SEARCH}?${params}`, {
-      headers: { 'User-Agent': 'EconomicTraumaBot/1.0 (research aggregator)' },
+    const resp = await fetch(PUBMED_SEARCH, {
+      method: 'POST',
+      headers: {
+        'User-Agent': 'EconomicTraumaBot/1.0 (research aggregator)',
+        'Content-Type': 'application/x-www-form-urlencoded',
+      },
+      body: params.toString(),
       signal: AbortSignal.timeout(30000),
     });
     const data = await resp.json();
@@ -94,8 +99,13 @@ async function fetchDetails(pmids) {
   });
   let xmlData;
   try {
-    const resp = await fetch(`${PUBMED_FETCH}?${params}`, {
-      headers: { 'User-Agent': 'EconomicTraumaBot/1.0 (research aggregator)' },
+    const resp = await fetch(PUBMED_FETCH, {
+      method: 'POST',
+      headers: {
+        'User-Agent': 'EconomicTraumaBot/1.0 (research aggregator)',
+        'Content-Type': 'application/x-www-form-urlencoded',
+      },
+      body: params.toString(),
       signal: AbortSignal.timeout(60000),
     });
     xmlData = await resp.text();
