@@ -81,8 +81,16 @@ def search_papers(query: str, retmax: int = 60) -> list:
     try:
         req = Request(url, headers=HEADERS)
         with urlopen(req, timeout=30) as resp:
-            data = json.loads(resp.read().decode())
+            body = resp.read().decode()
+        try:
+            data = json.loads(body)
+        except json.JSONDecodeError:
+            print(f"[ERROR] PubMed non-JSON response (first 300): {body[:300]}", file=sys.stderr)
+            return []
         return data.get("esearchresult", {}).get("idlist", [])
+    except URLError as e:
+        print(f"[ERROR] PubMed URL error: {e}", file=sys.stderr)
+        return []
     except Exception as e:
         print(f"[ERROR] PubMed search failed: {e}", file=sys.stderr)
         return []
