@@ -28,7 +28,7 @@ jobs:
           node-version: "24"
 
       - name: Set up Python
-        uses: actions/setup-python@8d9ed9ac5c534674a0a5add5e1af8f9854bc366f
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
         with:
           python-version: "3.12"
 
