@@ -6,39 +6,43 @@ const PUBMED_SEARCH = 'https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esearch.fcg
 const PUBMED_FETCH = 'https://eutils.ncbi.nlm.nih.gov/entrez/eutils/efetch.fcgi';
 const DEDUP_FILE = 'data/summarized_pmids.json';
 
-const EXPOSURE_TERMS = [
-  '"financial hardship"[tiab]', '"financial strain"[tiab]',
-  '"financial stress"[tiab]', '"financial distress"[tiab]',
-  '"economic hardship"[tiab]', '"economic stress"[tiab]',
-  '"material hardship"[tiab]', 'debt[tiab]',
-  'unemployment[tiab]', '"job loss"[tiab]', '"job insecurity"[tiab]',
-  '"housing instability"[tiab]', '"food insecurity"[tiab]',
-  '"economic abuse"[tiab]', '"financial toxicity"[tiab]',
-  '"Socioeconomic Factors"[Mesh]', '"Poverty"[Mesh]',
-  '"Housing Instability"[Mesh]', '"Food Insecurity"[Mesh]',
-  '"Social Determinants of Health"[Mesh]',
+const JOURNALS = [
+  'Social Science & Medicine',
+  'JAMA Psychiatry',
+  'American Journal of Public Health',
+  'JAMA Network Open',
+  'BMJ Open',
+  'PLOS ONE',
+  'BMC Public Health',
+  'Psychological Medicine',
+  'Journal of Affective Disorders',
+  'Social Psychiatry and Psychiatric Epidemiology',
+  'Brain Behavior and Immunity',
+  'Journal of Traumatic Stress',
+  'Biological Psychiatry',
+  'The Lancet',
+  'JAMA',
 ];
 
-const OUTCOME_TERMS = [
-  '"Psychological Trauma"[Mesh]', '"Stress, Psychological"[Mesh]',
-  'trauma*[tiab]', 'PTSD[tiab]', '"traumatic stress"[tiab]',
-  '"toxic stress"[tiab]', '"allostatic load"[tiab]',
-  'depression[tiab]', 'anxiety[tiab]',
-  '"psychological distress"[tiab]', 'suicide[tiab]',
-  '"substance use"[tiab]',
+const KEYWORDS = [
+  'financial hardship', 'financial strain', 'financial stress',
+  'economic hardship', 'economic stress', 'material hardship',
+  'debt', 'unemployment', 'job loss', 'job insecurity',
+  'housing instability', 'food insecurity', 'economic abuse',
+  'financial toxicity', 'poverty', 'deprivation',
+  'austerity', 'recession', 'economic crisis',
+  'allostatic load', 'trauma', 'PTSD',
 ];
 
-function buildQuery(days) {
+function buildQuery(days, maxJournals = 10) {
+  const journalPart = JOURNALS.slice(0, maxJournals)
+    .map(j => `"${j}"[Journal]`)
+    .join(' OR ');
   const now = new Date();
   const lookback = new Date(now.getTime() - days * 24 * 60 * 60 * 1000);
-  const y = lookback.getFullYear();
-  const m = String(lookback.getMonth() + 1).padStart(2, '0');
-  const d = String(lookback.getDate()).padStart(2, '0');
-  const dateStr = `${y}/${m}/${d}`;
+  const dateStr = `${lookback.getFullYear()}/${String(lookback.getMonth() + 1).padStart(2, '0')}/${String(lookback.getDate()).padStart(2, '0')}`;
   const datePart = `"${dateStr}"[Date - Publication] : "3000"[Date - Publication]`;
-  const exposure = `(${EXPOSURE_TERMS.join(' OR ')})`;
-  const outcomes = `(${OUTCOME_TERMS.join(' OR ')})`;
-  return `${exposure} AND ${outcomes} AND ${datePart}`;
+  return `(${journalPart}) AND ${datePart}`;
 }
 
 function loadSummarizedPmids() {
@@ -53,19 +57,17 @@ function loadSummarizedPmids() {
 }
 
 function curlGet(urlStr, timeoutMs = 30000) {
-  const safeUrl = urlStr.replace(/"/g, '');
-  const result = execSync(
-    `curl -sS -L --max-time ${Math.floor(timeoutMs / 1000)} -H "User-Agent: EconomicTraumaBot/1.0" "${safeUrl}"`,
+  const safeUrl = urlStr.replace(/"/g, '\\"');
+  return execSync(
+    `curl -sS --max-time ${Math.floor(timeoutMs / 1000)} -A "EconomicTraumaBot/1.0" "${safeUrl}"`,
     { encoding: 'utf-8', timeout: timeoutMs + 5000, maxBuffer: 10 * 1024 * 1024 },
   );
-  return result;
 }
 
 async function searchPapers(query, retmax = 50) {
   const params = new URLSearchParams({
     db: 'pubmed', term: query, retmax: String(retmax),
     sort: 'date', retmode: 'json',
-    tool: 'EconomicTraumaBot', email: 'bot@economic-trauma.dev',
   });
   try {
     const text = curlGet(`${PUBMED_SEARCH}?${params.toString()}`, 30000);
@@ -86,7 +88,6 @@ async function fetchDetails(pmids) {
   if (!pmids.length) return [];
   const params = new URLSearchParams({
     db: 'pubmed', id: pmids.join(','), retmode: 'xml',
-    tool: 'EconomicTraumaBot', email: 'bot@economic-trauma.dev',
   });
   let xmlData;
   try {
@@ -152,7 +153,12 @@ async function fetchDetails(pmids) {
       if (t) keywords.push(t.trim());
     }
 
-    papers.push({ pmid: String(pmid), title, journal, date: dateStr, abstract, url: link, keywords });
+    const textContent = `${title} ${abstract} ${keywords.join(' ')}`.toLowerCase();
+    const isRelevant = KEYWORDS.some(kw => textContent.includes(kw.toLowerCase()));
+
+    if (isRelevant) {
+      papers.push({ pmid: String(pmid), title, journal, date: dateStr, abstract, url: link, keywords });
+    }
   }
 
   return papers;
@@ -160,7 +166,7 @@ async function fetchDetails(pmids) {
 
 function parseArgs() {
   const args = process.argv.slice(2);
-  const opts = { days: 7, maxPapers: 50, output: 'papers.json' };
+  const opts = { days: 7, maxPapers: 60, output: 'papers.json' };
   for (let i = 0; i < args.length; i++) {
     switch (args[i]) {
       case '--days': opts.days = parseInt(args[++i], 10); break;
@@ -174,7 +180,7 @@ function parseArgs() {
 async function main() {
   const opts = parseArgs();
   const query = buildQuery(opts.days);
-  console.error(`[INFO] Searching PubMed for economic trauma papers (last ${opts.days} days)...`);
+  console.error(`[INFO] Searching PubMed (last ${opts.days} days, top 10 journals)...`);
 
   const allPmids = await searchPapers(query, opts.maxPapers);
   console.error(`[INFO] Found ${allPmids.length} PMIDs from PubMed`);
@@ -182,29 +188,26 @@ async function main() {
   if (!allPmids.length) {
     console.error('[INFO] No papers found');
     const tz = new Date().toLocaleDateString('sv-SE', { timeZone: 'Asia/Taipei' });
-    const empty = { date: tz, count: 0, papers: [] };
-    writeFileSync(opts.output, JSON.stringify(empty, null, 2), 'utf-8');
+    writeFileSync(opts.output, JSON.stringify({ date: tz, count: 0, papers: [] }, null, 2), 'utf-8');
     return;
   }
 
   const summarized = loadSummarizedPmids();
   const newPmids = allPmids.filter(id => !summarized.has(String(id)));
-  console.error(`[INFO] After dedup: ${newPmids.length} new papers (filtered ${allPmids.length - newPmids.length} already summarized)`);
+  console.error(`[INFO] After dedup: ${newPmids.length} new papers`);
 
   if (!newPmids.length) {
     console.error('[INFO] All papers already summarized');
     const tz = new Date().toLocaleDateString('sv-SE', { timeZone: 'Asia/Taipei' });
-    const empty = { date: tz, count: 0, papers: [] };
-    writeFileSync(opts.output, JSON.stringify(empty, null, 2), 'utf-8');
+    writeFileSync(opts.output, JSON.stringify({ date: tz, count: 0, papers: [] }, null, 2), 'utf-8');
     return;
   }
 
   const papers = await fetchDetails(newPmids);
-  console.error(`[INFO] Fetched details for ${papers.length} papers`);
+  console.error(`[INFO] Fetched details, ${papers.length} relevant to economic trauma`);
 
   const tz = new Date().toLocaleDateString('sv-SE', { timeZone: 'Asia/Taipei' });
-  const output = { date: tz, count: papers.length, papers };
-  writeFileSync(opts.output, JSON.stringify(output, null, 2), 'utf-8');
+  writeFileSync(opts.output, JSON.stringify({ date: tz, count: papers.length, papers }, null, 2), 'utf-8');
   console.error(`[INFO] Saved to ${opts.output}`);
 }
 
