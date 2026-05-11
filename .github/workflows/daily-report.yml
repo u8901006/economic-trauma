@@ -27,6 +27,11 @@ jobs:
         with:
           node-version: "24"
 
+      - name: Set up Python
+        uses: actions/setup-python@8d9ed9ac5c534674a0a5add5e1af8f9854bc366f
+        with:
+          python-version: "3.12"
+
       - name: Cache node_modules
         uses: actions/cache@5a3ec84eff668545956fd18022155c47e93e2684
         with:
@@ -51,9 +56,9 @@ jobs:
 
       - name: Fetch papers from PubMed
         run: |
-          node scripts/fetch_papers.mjs \
+          python scripts/fetch_papers.py \
             --days 7 \
-            --max-papers 50 \
+            --max-papers 60 \
             --output papers.json
         continue-on-error: true
 
@@ -61,7 +66,7 @@ jobs:
         id: papers
         run: |
           if [ -f papers.json ] && grep -q '"count"' papers.json; then
-            COUNT=$(node -e "const d=require('./papers.json');console.log(d.count||0)")
+            COUNT=$(python -c "import json; print(json.load(open('papers.json')).get('count',0))")
             echo "count=$COUNT" >> "$GITHUB_OUTPUT"
             echo "Papers found: $COUNT"
           else
