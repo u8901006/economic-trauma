@@ -6,38 +6,25 @@ const PUBMED_FETCH = 'https://eutils.ncbi.nlm.nih.gov/entrez/eutils/efetch.fcgi'
 const DEDUP_FILE = 'data/summarized_pmids.json';
 
 const EXPOSURE_TERMS = [
-  '"Socioeconomic Factors"[Mesh]', '"Economic Factors"[Mesh]',
-  '"Economic Status"[Mesh]', '"Poverty"[Mesh]', '"Income"[Mesh]',
-  '"Employment"[Mesh]', '"Housing Instability"[Mesh]',
-  '"Food Insecurity"[Mesh]', '"Social Determinants of Health"[Mesh]',
   '"financial hardship"[tiab]', '"financial strain"[tiab]',
   '"financial stress"[tiab]', '"financial distress"[tiab]',
   '"economic hardship"[tiab]', '"economic stress"[tiab]',
-  '"material hardship"[tiab]', 'debt[tiab]', 'indebtedness[tiab]',
-  'bankruptcy[tiab]', '"medical debt"[tiab]', 'unemployment[tiab]',
-  '"job loss"[tiab]', '"job insecurity"[tiab]', '"income shock"[tiab]',
-  '"housing insecurity"[tiab]', '"housing instability"[tiab]',
-  'eviction[tiab]', 'foreclosure[tiab]', 'homelessness[tiab]',
-  '"food insecurity"[tiab]', 'hunger[tiab]', 'austerity[tiab]',
-  'recession[tiab]', '"economic crisis"[tiab]',
-  '"cost-of-living crisis"[tiab]', '"economic abuse"[tiab]',
-  '"financial abuse"[tiab]', '"coerced debt"[tiab]',
-  '"financial toxicity"[tiab]',
+  '"material hardship"[tiab]', 'debt[tiab]',
+  'unemployment[tiab]', '"job loss"[tiab]', '"job insecurity"[tiab]',
+  '"housing instability"[tiab]', '"food insecurity"[tiab]',
+  '"economic abuse"[tiab]', '"financial toxicity"[tiab]',
+  '"Socioeconomic Factors"[Mesh]', '"Poverty"[Mesh]',
+  '"Housing Instability"[Mesh]', '"Food Insecurity"[Mesh]',
+  '"Social Determinants of Health"[Mesh]',
 ];
 
 const OUTCOME_TERMS = [
-  '"Stress Disorders, Post-Traumatic"[Mesh]',
-  '"Stress Disorders, Traumatic"[Mesh]',
-  '"Psychological Trauma"[Mesh]',
-  '"Stress, Psychological"[Mesh]',
-  '"Adverse Childhood Experiences"[Mesh]',
-  'trauma*[tiab]', '"traumatic stress"[tiab]', 'PTSD[tiab]',
-  '"complex PTSD"[tiab]', '"toxic stress"[tiab]',
-  '"adverse childhood experiences"[tiab]', 'ACEs[tiab]',
-  '"allostatic load"[tiab]', 'cortisol[tiab]', '"HPA axis"[tiab]',
-  'inflammation[tiab]', 'depression[tiab]', 'anxiety[tiab]',
-  '"psychological distress"[tiab]', '"suicidal ideation"[tiab]',
-  'suicide[tiab]', 'insomnia[tiab]', '"substance use"[tiab]',
+  '"Psychological Trauma"[Mesh]', '"Stress, Psychological"[Mesh]',
+  'trauma*[tiab]', 'PTSD[tiab]', '"traumatic stress"[tiab]',
+  '"toxic stress"[tiab]', '"allostatic load"[tiab]',
+  'depression[tiab]', 'anxiety[tiab]',
+  '"psychological distress"[tiab]', 'suicide[tiab]',
+  '"substance use"[tiab]',
 ];
 
 function buildQuery(days) {
@@ -71,15 +58,13 @@ async function searchPapers(query, retmax = 50) {
     retmax: String(retmax),
     sort: 'date',
     retmode: 'json',
+    tool: 'EconomicTraumaBot',
+    email: 'economic-trauma-bot@users.noreply.github.com',
   });
   try {
-    const resp = await fetch(PUBMED_SEARCH, {
-      method: 'POST',
-      headers: {
-        'User-Agent': 'EconomicTraumaBot/1.0 (research aggregator)',
-        'Content-Type': 'application/x-www-form-urlencoded',
-      },
-      body: params.toString(),
+    const url = `${PUBMED_SEARCH}?${params.toString()}`;
+    const resp = await fetch(url, {
+      headers: { 'User-Agent': 'EconomicTraumaBot/1.0 (mailto:economic-trauma-bot@users.noreply.github.com)' },
       signal: AbortSignal.timeout(30000),
     });
     const text = await resp.text();
@@ -106,16 +91,13 @@ async function fetchDetails(pmids) {
     db: 'pubmed',
     id: pmids.join(','),
     retmode: 'xml',
+    tool: 'EconomicTraumaBot',
+    email: 'economic-trauma-bot@users.noreply.github.com',
   });
   let xmlData;
   try {
-    const resp = await fetch(PUBMED_FETCH, {
-      method: 'POST',
-      headers: {
-        'User-Agent': 'EconomicTraumaBot/1.0 (research aggregator)',
-        'Content-Type': 'application/x-www-form-urlencoded',
-      },
-      body: params.toString(),
+    const resp = await fetch(`${PUBMED_FETCH}?${params.toString()}`, {
+      headers: { 'User-Agent': 'EconomicTraumaBot/1.0 (mailto:economic-trauma-bot@users.noreply.github.com)' },
       signal: AbortSignal.timeout(60000),
     });
     xmlData = await resp.text();
