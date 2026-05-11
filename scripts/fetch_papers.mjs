@@ -1,13 +1,10 @@
 import { writeFileSync, readFileSync, existsSync } from 'fs';
+import { execSync } from 'child_process';
 import { XMLParser } from 'fast-xml-parser';
-import https from 'https';
-import { URL } from 'url';
 
 const PUBMED_SEARCH = 'https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esearch.fcgi';
 const PUBMED_FETCH = 'https://eutils.ncbi.nlm.nih.gov/entrez/eutils/efetch.fcgi';
 const DEDUP_FILE = 'data/summarized_pmids.json';
-
-const HTTPS_AGENT = new https.Agent({ keepAlive: false });
 
 const EXPOSURE_TERMS = [
   '"financial hardship"[tiab]', '"financial strain"[tiab]',
@@ -55,18 +52,13 @@ function loadSummarizedPmids() {
   }
 }
 
-function httpsGet(urlStr, timeoutMs = 30000) {
-  return new Promise((resolve, reject) => {
-    const url = new URL(urlStr);
-    const req = https.get(url, { agent: HTTPS_AGENT, headers: { 'User-Agent': 'EconomicTraumaBot/1.0' } }, (res) => {
-      const chunks = [];
-      res.on('data', c => chunks.push(c));
-      res.on('end', () => resolve(Buffer.concat(chunks).toString('utf-8')));
-      res.on('error', reject);
-    });
-    req.setTimeout(timeoutMs, () => { req.destroy(); reject(new Error('timeout')); });
-    req.on('error', reject);
-  });
+function curlGet(urlStr, timeoutMs = 30000) {
+  const safeUrl = urlStr.replace(/"/g, '');
+  const result = execSync(
+    `curl -sS -L --max-time ${Math.floor(timeoutMs / 1000)} -H "User-Agent: EconomicTraumaBot/1.0" "${safeUrl}"`,
+    { encoding: 'utf-8', timeout: timeoutMs + 5000, maxBuffer: 10 * 1024 * 1024 },
+  );
+  return result;
 }
 
 async function searchPapers(query, retmax = 50) {
@@ -76,7 +68,7 @@ async function searchPapers(query, retmax = 50) {
     tool: 'EconomicTraumaBot', email: 'bot@economic-trauma.dev',
   });
   try {
-    const text = await httpsGet(`${PUBMED_SEARCH}?${params.toString()}`, 30000);
+    const text = curlGet(`${PUBMED_SEARCH}?${params.toString()}`, 30000);
     try {
       const data = JSON.parse(text);
       return data?.esearchresult?.idlist || [];
@@ -98,7 +90,7 @@ async function fetchDetails(pmids) {
   });
   let xmlData;
   try {
-    xmlData = await httpsGet(`${PUBMED_FETCH}?${params.toString()}`, 60000);
+    xmlData = curlGet(`${PUBMED_FETCH}?${params.toString()}`, 60000);
   } catch (e) {
     console.error(`[ERROR] PubMed fetch failed: ${e.message}`);
     return [];
