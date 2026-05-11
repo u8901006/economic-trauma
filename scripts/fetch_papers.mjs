@@ -82,8 +82,18 @@ async function searchPapers(query, retmax = 50) {
       body: params.toString(),
       signal: AbortSignal.timeout(30000),
     });
-    const data = await resp.json();
-    return data?.esearchresult?.idlist || [];
+    const text = await resp.text();
+    if (!resp.ok) {
+      console.error(`[ERROR] PubMed search HTTP ${resp.status}: ${text.slice(0, 300)}`);
+      return [];
+    }
+    try {
+      const data = JSON.parse(text);
+      return data?.esearchresult?.idlist || [];
+    } catch {
+      console.error(`[ERROR] PubMed non-JSON response (first 300 chars): ${text.slice(0, 300)}`);
+      return [];
+    }
   } catch (e) {
     console.error(`[ERROR] PubMed search failed: ${e.message}`);
     return [];
