@@ -1,9 +1,13 @@
 import { writeFileSync, readFileSync, existsSync } from 'fs';
 import { XMLParser } from 'fast-xml-parser';
+import https from 'https';
+import { URL } from 'url';
 
 const PUBMED_SEARCH = 'https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esearch.fcgi';
 const PUBMED_FETCH = 'https://eutils.ncbi.nlm.nih.gov/entrez/eutils/efetch.fcgi';
 const DEDUP_FILE = 'data/summarized_pmids.json';
+
+const HTTPS_AGENT = new https.Agent({ keepAlive: false });
 
 const EXPOSURE_TERMS = [
   '"financial hardship"[tiab]', '"financial strain"[tiab]',
@@ -51,32 +55,33 @@ function loadSummarizedPmids() {
   }
 }
 
+function httpsGet(urlStr, timeoutMs = 30000) {
+  return new Promise((resolve, reject) => {
+    const url = new URL(urlStr);
+    const req = https.get(url, { agent: HTTPS_AGENT, headers: { 'User-Agent': 'EconomicTraumaBot/1.0' } }, (res) => {
+      const chunks = [];
+      res.on('data', c => chunks.push(c));
+      res.on('end', () => resolve(Buffer.concat(chunks).toString('utf-8')));
+      res.on('error', reject);
+    });
+    req.setTimeout(timeoutMs, () => { req.destroy(); reject(new Error('timeout')); });
+    req.on('error', reject);
+  });
+}
+
 async function searchPapers(query, retmax = 50) {
   const params = new URLSearchParams({
-    db: 'pubmed',
-    term: query,
-    retmax: String(retmax),
-    sort: 'date',
-    retmode: 'json',
-    tool: 'EconomicTraumaBot',
-    email: 'economic-trauma-bot@users.noreply.github.com',
+    db: 'pubmed', term: query, retmax: String(retmax),
+    sort: 'date', retmode: 'json',
+    tool: 'EconomicTraumaBot', email: 'bot@economic-trauma.dev',
   });
   try {
-    const url = `${PUBMED_SEARCH}?${params.toString()}`;
-    const resp = await fetch(url, {
-      headers: { 'User-Agent': 'EconomicTraumaBot/1.0 (mailto:economic-trauma-bot@users.noreply.github.com)' },
-      signal: AbortSignal.timeout(30000),
-    });
-    const text = await resp.text();
-    if (!resp.ok) {
-      console.error(`[ERROR] PubMed search HTTP ${resp.status}: ${text.slice(0, 300)}`);
-      return [];
-    }
+    const text = await httpsGet(`${PUBMED_SEARCH}?${params.toString()}`, 30000);
     try {
       const data = JSON.parse(text);
       return data?.esearchresult?.idlist || [];
     } catch {
-      console.error(`[ERROR] PubMed non-JSON response (first 300 chars): ${text.slice(0, 300)}`);
+      console.error(`[ERROR] PubMed non-JSON (first 300): ${text.slice(0, 300)}`);
       return [];
     }
   } catch (e) {
@@ -88,19 +93,12 @@ async function searchPapers(query, retmax = 50) {
 async function fetchDetails(pmids) {
   if (!pmids.length) return [];
   const params = new URLSearchParams({
-    db: 'pubmed',
-    id: pmids.join(','),
-    retmode: 'xml',
-    tool: 'EconomicTraumaBot',
-    email: 'economic-trauma-bot@users.noreply.github.com',
+    db: 'pubmed', id: pmids.join(','), retmode: 'xml',
+    tool: 'EconomicTraumaBot', email: 'bot@economic-trauma.dev',
   });
   let xmlData;
   try {
-    const resp = await fetch(`${PUBMED_FETCH}?${params.toString()}`, {
-      headers: { 'User-Agent': 'EconomicTraumaBot/1.0 (mailto:economic-trauma-bot@users.noreply.github.com)' },
-      signal: AbortSignal.timeout(60000),
-    });
-    xmlData = await resp.text();
+    xmlData = await httpsGet(`${PUBMED_FETCH}?${params.toString()}`, 60000);
   } catch (e) {
     console.error(`[ERROR] PubMed fetch failed: ${e.message}`);
     return [];
