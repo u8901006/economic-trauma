@@ -76,15 +76,15 @@ jobs:
             echo "No papers found, will generate empty report"
           fi
 
-      - name: Generate report with Zhipu AI
+      - name: Generate report with NVIDIA AI
         env:
-          ZHIPU_API_KEY: "${{ secrets.ZHIPU_API_KEY }}"
-          ZHIPU_API_BASE: "https://open.bigmodel.cn/api/coding/paas/v4"
+          NVIDIA_API_KEY: "${{ secrets.NVIDIA_API_KEY }}"
+          NVIDIA_API_BASE: "https://integrate.api.nvidia.com/v1"
         run: |
           node scripts/generate_report.mjs \
             --input papers.json \
             --output docs/economic-trauma-${{ steps.date.outputs.target }}.html \
-            --api-key "$ZHIPU_API_KEY"
+            --api-key "$NVIDIA_API_KEY"
 
       - name: Generate index page
         run: node scripts/generate_index.mjs

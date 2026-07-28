@@ -1,9 +1,9 @@
 import { writeFileSync, readFileSync, existsSync, mkdirSync } from 'fs';
 import { resolve, dirname } from 'path';
 
-const API_BASE = process.env.ZHIPU_API_BASE || 'https://open.bigmodel.cn/api/coding/paas/v4';
-const PRIMARY_MODEL = 'glm-5-turbo';
-const FALLBACK_MODELS = ['glm-4.7', 'glm-4.7-flash'];
+const API_BASE = process.env.NVIDIA_API_BASE || 'https://integrate.api.nvidia.com/v1';
+const PRIMARY_MODEL = 'nvidia/nemotron-3-super-120b-a12b';
+const FALLBACK_MODELS = ['nvidia/nemotron-3-nano-30b-a3b'];
 const DEDUP_FILE = 'data/summarized_pmids.json';
 
 const SYSTEM_PROMPT = `你是「經濟創傷」(Economic Trauma) 跨領域研究的資深學者與科學傳播者。你的任務是：
@@ -153,9 +153,11 @@ ${papersText}
       { role: 'system', content: SYSTEM_PROMPT },
       { role: 'user', content: prompt },
     ],
-    temperature: 0.3,
-    top_p: 0.9,
-    max_tokens: 50000,
+    temperature: 1.0,
+    top_p: 0.95,
+    stream: false,
+    chat_template_kwargs: { enable_thinking: false },
+    max_tokens: 16384,
   };
 
   const modelsToTry = [PRIMARY_MODEL, ...FALLBACK_MODELS];
@@ -381,7 +383,7 @@ function generateHtml(analysis) {
       <div class="header-meta">
         <span class="badge badge-date">\u{1F4C5} ${dateDisplay}</span>
         <span class="badge badge-count">\u{1F4CA} ${totalCount} \u7bc7\u6587\u737b</span>
-        <span class="badge badge-source">Powered by PubMed + Zhipu AI</span>
+        <span class="badge badge-source">Powered by PubMed + NVIDIA AI</span>
       </div>
     </div>
   </header>
@@ -441,9 +443,9 @@ function parseArgs() {
 
 async function main() {
   const opts = parseArgs();
-  const apiKey = opts.apiKey || process.env.ZHIPU_API_KEY || '';
+  const apiKey = opts.apiKey || process.env.NVIDIA_API_KEY || '';
   if (!apiKey) {
-    console.error('[ERROR] No API key. Set ZHIPU_API_KEY env var or use --api-key');
+    console.error('[ERROR] No API key. Set NVIDIA_API_KEY env var or use --api-key');
     process.exit(1);
   }
   if (!opts.input || !opts.output) {
